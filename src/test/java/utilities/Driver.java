@@ -1,68 +1,60 @@
 package utilities;
 
-import org.openqa.selenium.UnexpectedAlertBehaviour;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.chrome.ChromeDriver;
 import org.openqa.selenium.chrome.ChromeOptions;
 import org.openqa.selenium.edge.EdgeDriver;
 import org.openqa.selenium.firefox.FirefoxDriver;
-import org.openqa.selenium.remote.CapabilityType;
-import org.openqa.selenium.remote.DesiredCapabilities;
 
 import java.time.Duration;
 
-//Singleton driver class
 public class Driver {
 
-    private static WebDriver driver;//Without initialization this is null.
+    // ThreadLocal to maintain a separate WebDriver instance per thread
+    private static ThreadLocal<WebDriver> driverThread = new ThreadLocal<>();
 
-    private Driver() {//None can create an object from this class
+    // Private constructor to prevent instantiation
+    private Driver() {
     }
 
-    //This creates a new WebDriver instance if it does not exist.
     public static WebDriver getDriver() {
-        
-        if (driver == null) {
-            switch (ConfigReader.getProperty("browser").toLowerCase()) {
-                case "firefox":
-                    driver = new FirefoxDriver();
-                    break;
+        // If no WebDriver instance is assigned to the current thread, create a new one
+        if (driverThread.get() == null) {
+            String browser = ConfigReader.getProperty("browser");
+
+            switch (browser) {
                 case "edge":
-                    driver = new EdgeDriver();
+                    driverThread.set(new EdgeDriver());
+                    break;
+                case "firefox":
+                    driverThread.set(new FirefoxDriver());
                     break;
                 case "headless":
-                    driver = new ChromeDriver(new ChromeOptions().addArguments("--headless"));
+                    driverThread.set(new ChromeDriver(new ChromeOptions().addArguments("--headless")));
                     break;
                 default:
-                    driver = new ChromeDriver();
-
+                    driverThread.set(new ChromeDriver());
             }
-            driver.manage().window().maximize();
-            driver.manage().timeouts().implicitlyWait(Duration.ofSeconds(10));
+
+            // WebDriver configuration common for all instances
+            getDriver().manage().window().maximize();
+            getDriver().manage().timeouts().implicitlyWait(Duration.ofSeconds(10));
         }
 
-        return driver;
+        // Return the WebDriver instance specific to the current thread
+        return driverThread.get();
     }
 
-    //Safely close the driver
     public static void closeDriver() {
-        try {
-            Thread.sleep(2000);//Don't use this
-        } catch (InterruptedException e) {
-            throw new RuntimeException(e);
-        }
-        if (driver != null) {
-            driver.quit();
-            driver = null;
+        // Quit and remove WebDriver instance for the current thread
+        if (driverThread.get() != null) {
+            try {
+                Thread.sleep(3000); // Optional sleep, can be removed if not needed
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+            driverThread.get().quit();
+            driverThread.remove(); // Remove instance to prevent memory leaks
         }
     }
-
-    /*
-    Multi-Browser Support: Chrome, Firefox, Safari, Headless Chrome
-    Configuration-Driven: Browser type from properties file
-    Implicit Wait: Built-in timeout management
-    Window Management: Automatic maximization
-    Proper Cleanup: closeDriver() method for resource management
-     */
-
 }
